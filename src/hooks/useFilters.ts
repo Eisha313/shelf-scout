@@ -1,162 +1,174 @@
 import { useCallback, useMemo } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { RootState, AppDispatch } from '../store';
+import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../store';
 import {
   toggleCategory,
   setSelectedCategories,
-  clearCategories,
-  setSelectedPriceRange,
-  setMinPrice,
-  setMaxPrice,
-  resetPriceRange,
-  setAvailabilityFilter,
+  setActivePriceRange,
+  setAvailability,
   setSearchQuery,
-  clearSearchQuery,
   setSortBy,
-  resetAllFilters,
+  resetFilters,
   PriceRange,
-  FilterState,
+  AvailabilityFilter,
 } from '../store/filterSlice';
-
-export interface Product {
-  id: string;
-  name: string;
-  price: number;
-  category: string;
-  inStock: boolean;
-  createdAt: string;
-}
+import { Product } from '../types/product';
 
 export const useFilters = () => {
-  const dispatch = useDispatch<AppDispatch>();
+  const dispatch = useDispatch();
   const filters = useSelector((state: RootState) => state.filters);
 
-  const handleToggleCategory = useCallback((category: string) => {
-    dispatch(toggleCategory(category));
+  const handleToggleCategory = useCallback(
+    (category: string) => {
+      dispatch(toggleCategory(category));
+    },
+    [dispatch]
+  );
+
+  const handleSetCategories = useCallback(
+    (categories: string[]) => {
+      dispatch(setSelectedCategories(categories));
+    },
+    [dispatch]
+  );
+
+  const handleSetPriceRange = useCallback(
+    (range: PriceRange) => {
+      // Fix: Validate range before dispatching
+      if (range.min <= range.max && range.min >= 0) {
+        dispatch(setActivePriceRange(range));
+      }
+    },
+    [dispatch]
+  );
+
+  const handleSetAvailability = useCallback(
+    (availability: AvailabilityFilter) => {
+      dispatch(setAvailability(availability));
+    },
+    [dispatch]
+  );
+
+  const handleSetSearchQuery = useCallback(
+    (query: string) => {
+      dispatch(setSearchQuery(query));
+    },
+    [dispatch]
+  );
+
+  const handleSetSortBy = useCallback(
+    (sortBy: 'name' | 'price-asc' | 'price-desc' | 'newest') => {
+      dispatch(setSortBy(sortBy));
+    },
+    [dispatch]
+  );
+
+  const handleResetFilters = useCallback(() => {
+    dispatch(resetFilters());
   }, [dispatch]);
 
-  const handleSetCategories = useCallback((categories: string[]) => {
-    dispatch(setSelectedCategories(categories));
-  }, [dispatch]);
+  const filterProducts = useCallback(
+    (products: Product[]): Product[] => {
+      if (!products || products.length === 0) {
+        return [];
+      }
 
-  const handleClearCategories = useCallback(() => {
-    dispatch(clearCategories());
-  }, [dispatch]);
+      let filtered = [...products];
 
-  const handleSetPriceRange = useCallback((range: PriceRange) => {
-    dispatch(setSelectedPriceRange(range));
-  }, [dispatch]);
+      // Filter by search query
+      if (filters.searchQuery.trim()) {
+        const query = filters.searchQuery.toLowerCase().trim();
+        filtered = filtered.filter(
+          (product) =>
+            product.title.toLowerCase().includes(query) ||
+            product.description?.toLowerCase().includes(query) ||
+            product.category?.toLowerCase().includes(query)
+        );
+      }
 
-  const handleSetMinPrice = useCallback((min: number) => {
-    dispatch(setMinPrice(min));
-  }, [dispatch]);
+      // Filter by categories
+      if (filters.selectedCategories.length > 0) {
+        filtered = filtered.filter(
+          (product) =>
+            product.category &&
+            filters.selectedCategories.includes(product.category)
+        );
+      }
 
-  const handleSetMaxPrice = useCallback((max: number) => {
-    dispatch(setMaxPrice(max));
-  }, [dispatch]);
-
-  const handleResetPriceRange = useCallback(() => {
-    dispatch(resetPriceRange());
-  }, [dispatch]);
-
-  const handleSetAvailability = useCallback((availability: 'all' | 'in-stock' | 'out-of-stock') => {
-    dispatch(setAvailabilityFilter(availability));
-  }, [dispatch]);
-
-  const handleSetSearchQuery = useCallback((query: string) => {
-    dispatch(setSearchQuery(query));
-  }, [dispatch]);
-
-  const handleClearSearch = useCallback(() => {
-    dispatch(clearSearchQuery());
-  }, [dispatch]);
-
-  const handleSetSortBy = useCallback((sortBy: FilterState['sortBy']) => {
-    dispatch(setSortBy(sortBy));
-  }, [dispatch]);
-
-  const handleResetAll = useCallback(() => {
-    dispatch(resetAllFilters());
-  }, [dispatch]);
-
-  const filterProducts = useCallback((products: Product[]): Product[] => {
-    let filtered = [...products];
-
-    // Filter by search query
-    if (filters.searchQuery) {
-      const query = filters.searchQuery.toLowerCase();
-      filtered = filtered.filter(product =>
-        product.name.toLowerCase().includes(query)
+      // Filter by price range
+      filtered = filtered.filter(
+        (product) =>
+          product.price >= filters.activePriceRange.min &&
+          product.price <= filters.activePriceRange.max
       );
-    }
 
-    // Filter by categories
-    if (filters.selectedCategories.length > 0) {
-      filtered = filtered.filter(product =>
-        filters.selectedCategories.includes(product.category)
-      );
-    }
+      // Filter by availability
+      if (filters.availability !== 'all') {
+        filtered = filtered.filter((product) => {
+          const inStock = (product.stock ?? 0) > 0;
+          return filters.availability === 'in-stock' ? inStock : !inStock;
+        });
+      }
 
-    // Filter by price range
-    filtered = filtered.filter(product =>
-      product.price >= filters.selectedPriceRange.min &&
-      product.price <= filters.selectedPriceRange.max
-    );
+      // Sort products
+      filtered.sort((a, b) => {
+        switch (filters.sortBy) {
+          case 'name':
+            return a.title.localeCompare(b.title);
+          case 'price-asc':
+            return a.price - b.price;
+          case 'price-desc':
+            return b.price - a.price;
+          case 'newest':
+          default:
+            return (b.id ?? 0) - (a.id ?? 0);
+        }
+      });
 
-    // Filter by availability
-    if (filters.availabilityFilter === 'in-stock') {
-      filtered = filtered.filter(product => product.inStock);
-    } else if (filters.availabilityFilter === 'out-of-stock') {
-      filtered = filtered.filter(product => !product.inStock);
-    }
+      return filtered;
+    },
+    [filters]
+  );
 
-    // Sort products
-    switch (filters.sortBy) {
-      case 'name-asc':
-        filtered.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case 'name-desc':
-        filtered.sort((a, b) => b.name.localeCompare(a.name));
-        break;
-      case 'price-asc':
-        filtered.sort((a, b) => a.price - b.price);
-        break;
-      case 'price-desc':
-        filtered.sort((a, b) => b.price - a.price);
-        break;
-      case 'newest':
-        filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        break;
-    }
-
-    return filtered;
-  }, [filters]);
-
+  // Fix: Compute active filter count correctly
   const activeFilterCount = useMemo(() => {
     let count = 0;
-    if (filters.selectedCategories.length > 0) count++;
-    if (filters.selectedPriceRange.min !== filters.priceRange.min ||
-        filters.selectedPriceRange.max !== filters.priceRange.max) count++;
-    if (filters.availabilityFilter !== 'all') count++;
-    if (filters.searchQuery) count++;
+
+    if (filters.selectedCategories.length > 0) {
+      count += 1;
+    }
+
+    if (
+      filters.activePriceRange.min > filters.priceRange.min ||
+      filters.activePriceRange.max < filters.priceRange.max
+    ) {
+      count += 1;
+    }
+
+    if (filters.availability !== 'all') {
+      count += 1;
+    }
+
+    if (filters.searchQuery.trim()) {
+      count += 1;
+    }
+
     return count;
   }, [filters]);
+
+  const hasActiveFilters = activeFilterCount > 0;
 
   return {
     filters,
     activeFilterCount,
+    hasActiveFilters,
     toggleCategory: handleToggleCategory,
     setCategories: handleSetCategories,
-    clearCategories: handleClearCategories,
     setPriceRange: handleSetPriceRange,
-    setMinPrice: handleSetMinPrice,
-    setMaxPrice: handleSetMaxPrice,
-    resetPriceRange: handleResetPriceRange,
     setAvailability: handleSetAvailability,
     setSearchQuery: handleSetSearchQuery,
-    clearSearch: handleClearSearch,
     setSortBy: handleSetSortBy,
-    resetAllFilters: handleResetAll,
+    resetFilters: handleResetFilters,
     filterProducts,
   };
 };

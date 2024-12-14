@@ -5,22 +5,26 @@ export interface PriceRange {
   max: number;
 }
 
-export interface FilterState {
+export type AvailabilityFilter = 'all' | 'in-stock' | 'out-of-stock';
+
+interface FilterState {
   categories: string[];
   selectedCategories: string[];
   priceRange: PriceRange;
-  selectedPriceRange: PriceRange;
-  availabilityFilter: 'all' | 'in-stock' | 'out-of-stock';
+  activePriceRange: PriceRange;
+  availability: AvailabilityFilter;
   searchQuery: string;
-  sortBy: 'name-asc' | 'name-desc' | 'price-asc' | 'price-desc' | 'newest';
+  sortBy: 'name' | 'price-asc' | 'price-desc' | 'newest';
 }
+
+const DEFAULT_PRICE_RANGE: PriceRange = { min: 0, max: 1000 };
 
 const initialState: FilterState = {
   categories: [],
   selectedCategories: [],
-  priceRange: { min: 0, max: 1000 },
-  selectedPriceRange: { min: 0, max: 1000 },
-  availabilityFilter: 'all',
+  priceRange: DEFAULT_PRICE_RANGE,
+  activePriceRange: DEFAULT_PRICE_RANGE,
+  availability: 'all',
   searchQuery: '',
   sortBy: 'newest',
 };
@@ -32,54 +36,72 @@ const filterSlice = createSlice({
     setCategories: (state, action: PayloadAction<string[]>) => {
       state.categories = action.payload;
     },
+
     toggleCategory: (state, action: PayloadAction<string>) => {
       const category = action.payload;
       const index = state.selectedCategories.indexOf(category);
+
       if (index === -1) {
         state.selectedCategories.push(category);
       } else {
         state.selectedCategories.splice(index, 1);
       }
     },
+
     setSelectedCategories: (state, action: PayloadAction<string[]>) => {
       state.selectedCategories = action.payload;
     },
-    clearCategories: (state) => {
-      state.selectedCategories = [];
-    },
+
     setPriceRange: (state, action: PayloadAction<PriceRange>) => {
       state.priceRange = action.payload;
+      // Fix: Also update active range when base range changes
+      // Ensure active range stays within bounds
+      state.activePriceRange = {
+        min: Math.max(action.payload.min, state.activePriceRange.min),
+        max: Math.min(action.payload.max, state.activePriceRange.max),
+      };
+      // Fix: Handle case where min > max after adjustment
+      if (state.activePriceRange.min > state.activePriceRange.max) {
+        state.activePriceRange = action.payload;
+      }
     },
-    setSelectedPriceRange: (state, action: PayloadAction<PriceRange>) => {
-      state.selectedPriceRange = action.payload;
+
+    setActivePriceRange: (state, action: PayloadAction<PriceRange>) => {
+      // Fix: Validate and clamp price range values
+      const { min, max } = action.payload;
+      state.activePriceRange = {
+        min: Math.max(state.priceRange.min, Math.min(min, max)),
+        max: Math.min(state.priceRange.max, Math.max(min, max)),
+      };
     },
-    setMinPrice: (state, action: PayloadAction<number>) => {
-      state.selectedPriceRange.min = Math.max(0, action.payload);
+
+    setAvailability: (state, action: PayloadAction<AvailabilityFilter>) => {
+      state.availability = action.payload;
     },
-    setMaxPrice: (state, action: PayloadAction<number>) => {
-      state.selectedPriceRange.max = action.payload;
-    },
-    resetPriceRange: (state) => {
-      state.selectedPriceRange = state.priceRange;
-    },
-    setAvailabilityFilter: (state, action: PayloadAction<'all' | 'in-stock' | 'out-of-stock'>) => {
-      state.availabilityFilter = action.payload;
-    },
+
     setSearchQuery: (state, action: PayloadAction<string>) => {
       state.searchQuery = action.payload;
     },
-    clearSearchQuery: (state) => {
-      state.searchQuery = '';
-    },
-    setSortBy: (state, action: PayloadAction<FilterState['sortBy']>) => {
+
+    setSortBy: (
+      state,
+      action: PayloadAction<'name' | 'price-asc' | 'price-desc' | 'newest'>
+    ) => {
       state.sortBy = action.payload;
     },
-    resetAllFilters: (state) => {
+
+    resetFilters: (state) => {
+      // Fix: Properly reset all filters while preserving categories list and price bounds
       state.selectedCategories = [];
-      state.selectedPriceRange = state.priceRange;
-      state.availabilityFilter = 'all';
+      state.activePriceRange = { ...state.priceRange };
+      state.availability = 'all';
       state.searchQuery = '';
       state.sortBy = 'newest';
+    },
+
+    resetAllFilters: () => {
+      // Complete reset to initial state
+      return initialState;
     },
   },
 });
@@ -88,16 +110,12 @@ export const {
   setCategories,
   toggleCategory,
   setSelectedCategories,
-  clearCategories,
   setPriceRange,
-  setSelectedPriceRange,
-  setMinPrice,
-  setMaxPrice,
-  resetPriceRange,
-  setAvailabilityFilter,
+  setActivePriceRange,
+  setAvailability,
   setSearchQuery,
-  clearSearchQuery,
   setSortBy,
+  resetFilters,
   resetAllFilters,
 } = filterSlice.actions;
 
