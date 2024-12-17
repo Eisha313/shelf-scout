@@ -1,78 +1,81 @@
-import { useCallback, useMemo } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
+import { RootState } from '../store';
 import {
+  hydrateCart,
   addToCart,
   removeFromCart,
   updateQuantity,
   incrementQuantity,
   decrementQuantity,
   clearCart,
-  toggleCart,
-  openCart,
-  closeCart,
-  selectCartItems,
-  selectCartIsOpen,
-  selectCartItemCount,
-  selectCartTotal,
-  selectIsInCart,
+  CartItem,
 } from '../store/cartSlice';
-import { Product, CartItem } from '../types/product';
+import { Product } from '../types/product';
 
 interface UseCartReturn {
   items: CartItem[];
-  isOpen: boolean;
-  itemCount: number;
-  total: number;
+  totalItems: number;
+  totalPrice: number;
+  isHydrated: boolean;
   addItem: (product: Product, quantity?: number) => void;
-  removeItem: (productId: string) => void;
-  setQuantity: (productId: string, quantity: number) => void;
-  increment: (productId: string) => void;
-  decrement: (productId: string) => void;
+  removeItem: (productId: number) => void;
+  setQuantity: (productId: number, quantity: number) => void;
+  increment: (productId: number) => void;
+  decrement: (productId: number) => void;
   clear: () => void;
-  toggle: () => void;
-  open: () => void;
-  close: () => void;
-  isInCart: (productId: string) => boolean;
-  getItemQuantity: (productId: string) => number;
+  isInCart: (productId: number) => boolean;
+  getItemQuantity: (productId: number) => number;
 }
 
 export const useCart = (): UseCartReturn => {
   const dispatch = useDispatch();
-  const items = useSelector(selectCartItems);
-  const isOpen = useSelector(selectCartIsOpen);
-  const itemCount = useSelector(selectCartItemCount);
-  const total = useSelector(selectCartTotal);
+  const { items, isHydrated } = useSelector((state: RootState) => state.cart);
+
+  // Hydrate cart from localStorage on mount
+  useEffect(() => {
+    if (!isHydrated) {
+      dispatch(hydrateCart());
+    }
+  }, [dispatch, isHydrated]);
+
+  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
+
+  const totalPrice = items.reduce(
+    (sum, item) => sum + item.product.price * item.quantity,
+    0
+  );
 
   const addItem = useCallback(
-    (product: Product, quantity = 1) => {
+    (product: Product, quantity: number = 1) => {
       dispatch(addToCart({ product, quantity }));
     },
     [dispatch]
   );
 
   const removeItem = useCallback(
-    (productId: string) => {
+    (productId: number) => {
       dispatch(removeFromCart(productId));
     },
     [dispatch]
   );
 
   const setQuantity = useCallback(
-    (productId: string, quantity: number) => {
+    (productId: number, quantity: number) => {
       dispatch(updateQuantity({ productId, quantity }));
     },
     [dispatch]
   );
 
   const increment = useCallback(
-    (productId: string) => {
+    (productId: number) => {
       dispatch(incrementQuantity(productId));
     },
     [dispatch]
   );
 
   const decrement = useCallback(
-    (productId: string) => {
+    (productId: number) => {
       dispatch(decrementQuantity(productId));
     },
     [dispatch]
@@ -82,69 +85,33 @@ export const useCart = (): UseCartReturn => {
     dispatch(clearCart());
   }, [dispatch]);
 
-  const toggle = useCallback(() => {
-    dispatch(toggleCart());
-  }, [dispatch]);
-
-  const open = useCallback(() => {
-    dispatch(openCart());
-  }, [dispatch]);
-
-  const close = useCallback(() => {
-    dispatch(closeCart());
-  }, [dispatch]);
-
   const isInCart = useCallback(
-    (productId: string) => {
-      return items.some(item => item.product.id === productId);
+    (productId: number): boolean => {
+      return items.some((item) => item.product.id === productId);
     },
     [items]
   );
 
   const getItemQuantity = useCallback(
-    (productId: string) => {
-      const item = items.find(item => item.product.id === productId);
+    (productId: number): number => {
+      const item = items.find((item) => item.product.id === productId);
       return item?.quantity ?? 0;
     },
     [items]
   );
 
-  return useMemo(
-    () => ({
-      items,
-      isOpen,
-      itemCount,
-      total,
-      addItem,
-      removeItem,
-      setQuantity,
-      increment,
-      decrement,
-      clear,
-      toggle,
-      open,
-      close,
-      isInCart,
-      getItemQuantity,
-    }),
-    [
-      items,
-      isOpen,
-      itemCount,
-      total,
-      addItem,
-      removeItem,
-      setQuantity,
-      increment,
-      decrement,
-      clear,
-      toggle,
-      open,
-      close,
-      isInCart,
-      getItemQuantity,
-    ]
-  );
+  return {
+    items,
+    totalItems,
+    totalPrice,
+    isHydrated,
+    addItem,
+    removeItem,
+    setQuantity,
+    increment,
+    decrement,
+    clear,
+    isInCart,
+    getItemQuantity,
+  };
 };
-
-export default useCart;

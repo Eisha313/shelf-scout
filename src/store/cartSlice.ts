@@ -8,80 +8,86 @@ export interface CartItem {
 
 interface CartState {
   items: CartItem[];
-  isOpen: boolean;
+  isHydrated: boolean;
 }
+
+const CART_STORAGE_KEY = 'shelf-scout-cart';
 
 const loadCartFromStorage = (): CartItem[] => {
   try {
-    const stored = localStorage.getItem('shelf-scout-cart');
+    const stored = localStorage.getItem(CART_STORAGE_KEY);
     if (stored) {
       const parsed = JSON.parse(stored);
-      // Validate cart items have required fields
+      // Validate cart structure
       if (Array.isArray(parsed)) {
         return parsed.filter(
           (item): item is CartItem =>
             item &&
-            typeof item.quantity === 'number' &&
-            item.quantity > 0 &&
+            typeof item === 'object' &&
             item.product &&
-            typeof item.product.id === 'number'
+            typeof item.product.id === 'number' &&
+            typeof item.quantity === 'number' &&
+            item.quantity > 0
         );
       }
     }
   } catch (error) {
     console.error('Failed to load cart from localStorage:', error);
+    localStorage.removeItem(CART_STORAGE_KEY);
   }
   return [];
 };
 
 const saveCartToStorage = (items: CartItem[]): void => {
   try {
-    localStorage.setItem('shelf-scout-cart', JSON.stringify(items));
+    localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
   } catch (error) {
     console.error('Failed to save cart to localStorage:', error);
   }
 };
 
 const initialState: CartState = {
-  items: loadCartFromStorage(),
-  isOpen: false,
+  items: [],
+  isHydrated: false,
 };
 
 const cartSlice = createSlice({
   name: 'cart',
   initialState,
   reducers: {
-    addToCart: (state, action: PayloadAction<Product>) => {
+    hydrateCart(state) {
+      if (!state.isHydrated) {
+        state.items = loadCartFromStorage();
+        state.isHydrated = true;
+      }
+    },
+    addToCart(state, action: PayloadAction<{ product: Product; quantity?: number }>) {
+      const { product, quantity = 1 } = action.payload;
       const existingIndex = state.items.findIndex(
-        (item) => item.product.id === action.payload.id
+        (item) => item.product.id === product.id
       );
 
       if (existingIndex !== -1) {
-        // Fix: Ensure quantity doesn't exceed available stock
-        const currentQty = state.items[existingIndex].quantity;
-        const maxQty = action.payload.stock ?? 99;
-        state.items[existingIndex].quantity = Math.min(currentQty + 1, maxQty);
-      } else {
-        state.items.push({
-          product: action.payload,
-          quantity: 1,
-        });
+        // Use Math.max to prevent negative quantities
+        state.items[existingIndex].quantity = Math.max(
+          1,
+          state.items[existingIndex].quantity + quantity
+        );
+      } else if (quantity > 0) {
+        state.items.push({ product, quantity });
       }
 
       saveCartToStorage(state.items);
     },
-
-    removeFromCart: (state, action: PayloadAction<number>) => {
-      state.items = state.items.filter(
-        (item) => item.product.id !== action.payload
-      );
+    removeFromCart(state, action: PayloadAction<number>) {
+      const productId = action.payload;
+      state.items = state.items.filter((item) => item.product.id !== productId);
       saveCartToStorage(state.items);
     },
-
-    updateQuantity: (
+    updateQuantity(
       state,
       action: PayloadAction<{ productId: number; quantity: number }>
-    ) => {
+    ) {
       const { productId, quantity } = action.payload;
       const itemIndex = state.items.findIndex(
         (item) => item.product.id === productId
@@ -89,39 +95,54 @@ const cartSlice = createSlice({
 
       if (itemIndex !== -1) {
         if (quantity <= 0) {
-          // Fix: Remove item when quantity is 0 or negative
+          // Remove item if quantity is 0 or negative
           state.items.splice(itemIndex, 1);
         } else {
-          // Fix: Clamp quantity to available stock
-          const maxQty = state.items[itemIndex].product.stock ?? 99;
-          state.items[itemIndex].quantity = Math.min(Math.max(1, quantity), maxQty);
+          state.items[itemIndex].quantity = quantity;
         }
         saveCartToStorage(state.items);
       }
     },
+    incrementQuantity(state, action: PayloadAction<number>) {
+      const productId = action.payload;
+      const item = state.items.find((item) => item.product.id === productId);
+      if (item) {
+        item.quantity += 1;
+        saveCartToStorage(state.items);
+      }
+    },
+    decrementQuantity(state, action: PayloadAction<number>) {
+      const productId = action.payload;
+      const itemIndex = state.items.findIndex(
+        (item) => item.product.id === productId
+      );
 
-    clearCart: (state) => {
+      if (itemIndex !== -1) {
+        const item = state.items[itemIndex];
+        if (item.quantity > 1) {
+          item.quantity -= 1;
+        } else {
+          // Remove item when quantity would become 0
+          state.items.splice(itemIndex, 1);
+        }
+        saveCartToStorage(state.items);
+      }
+    },
+    clearCart(state) {
       state.items = [];
       saveCartToStorage(state.items);
-    },
-
-    toggleCart: (state) => {
-      state.isOpen = !state.isOpen;
-    },
-
-    setCartOpen: (state, action: PayloadAction<boolean>) => {
-      state.isOpen = action.payload;
     },
   },
 });
 
 export const {
+  hydrateCart,
   addToCart,
   removeFromCart,
   updateQuantity,
+  incrementQuantity,
+  decrementQuantity,
   clearCart,
-  toggleCart,
-  setCartOpen,
 } = cartSlice.actions;
 
 export default cartSlice.reducer;

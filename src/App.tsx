@@ -1,68 +1,65 @@
-import { Provider } from 'react-redux';
-import { store } from './store/store';
-import { ProductGrid } from './components/ProductGrid';
-import { FilterSidebar } from './components/FilterSidebar';
-import { Cart } from './components/Cart';
-import { useState } from 'react';
+import React, { useEffect } from 'react';
+import { Provider, useDispatch, useSelector } from 'react-redux';
+import { store, RootState } from './store';
+import { hydrateCart } from './store/cartSlice';
+import { ProductGrid } from './components/product';
 
-/**
- * Main application component
- * Provides Redux store and renders the main layout
- */
-function App() {
-	const [sidebarOpen, setSidebarOpen] = useState(false);
-	const [cartOpen, setCartOpen] = useState(false);
+const AppContent: React.FC = () => {
+  const dispatch = useDispatch();
+  const isHydrated = useSelector((state: RootState) => state.cart.isHydrated);
 
-	return (
-		<Provider store={store}>
-			<div className="min-h-screen bg-gray-50">
-				{/* Header */}
-				<header className="sticky top-0 z-40 bg-white shadow-sm">
-					<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
-						<div className="flex h-16 items-center justify-between">
-							<div className="flex items-center">
-								<button
-									type="button"
-									className="lg:hidden p-2 text-gray-600 hover:text-gray-900"
-									onClick={() => setSidebarOpen(!sidebarOpen)}
-								>
-									<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-										<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-									</svg>
-								</button>
-								<h1 className="ml-2 lg:ml-0 text-xl font-bold text-gray-900">Shelf Scout</h1>
-							</div>
-							<button
-								type="button"
-								className="relative p-2 text-gray-600 hover:text-gray-900"
-								onClick={() => setCartOpen(!cartOpen)}
-							>
-								<svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-									<path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" />
-								</svg>
-							</button>
-						</div>
-					</div>
-				</header>
+  useEffect(() => {
+    // Hydrate cart on app initialization
+    if (!isHydrated) {
+      dispatch(hydrateCart());
+    }
+  }, [dispatch, isHydrated]);
 
-				{/* Main Content */}
-				<div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-6">
-					<div className="flex gap-6">
-						{/* Filter Sidebar */}
-						<FilterSidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white shadow-sm border-b border-gray-200">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <div className="flex items-center justify-between">
+            <h1 className="text-2xl font-bold text-gray-900">Shelf Scout</h1>
+            <nav className="flex items-center space-x-4">
+              <span className="text-gray-600">Product Catalog</span>
+            </nav>
+          </div>
+        </div>
+      </header>
 
-						{/* Product Grid */}
-						<main className="flex-1">
-							<ProductGrid />
-						</main>
-					</div>
-				</div>
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col lg:flex-row gap-8">
+          <aside className="lg:w-64 flex-shrink-0">
+            <div className="bg-white rounded-lg shadow p-4">
+              <h2 className="font-semibold text-gray-900 mb-4">Filters</h2>
+              <p className="text-gray-500 text-sm">Filter options coming soon...</p>
+            </div>
+          </aside>
 
-				{/* Cart Drawer */}
-				<Cart isOpen={cartOpen} onClose={() => setCartOpen(false)} />
-			</div>
-		</Provider>
-	);
-}
+          <div className="flex-1">
+            <ProductGrid />
+          </div>
+        </div>
+      </main>
+
+      <footer className="bg-white border-t border-gray-200 mt-auto">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          <p className="text-center text-gray-500 text-sm">
+            &copy; 2024 Shelf Scout. All rights reserved.
+          </p>
+        </div>
+      </footer>
+    </div>
+  );
+};
+
+const App: React.FC = () => {
+  return (
+    <Provider store={store}>
+      <AppContent />
+    </Provider>
+  );
+};
 
 export default App;
