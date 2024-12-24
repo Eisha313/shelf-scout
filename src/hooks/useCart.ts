@@ -1,4 +1,4 @@
-import { useCallback, useEffect } from 'react';
+import { useEffect, useCallback, useMemo } from 'react';
 import { useDispatch, useSelector } from 'react-redux';
 import { RootState } from '../store';
 import {
@@ -6,29 +6,12 @@ import {
   addToCart,
   removeFromCart,
   updateQuantity,
-  incrementQuantity,
-  decrementQuantity,
   clearCart,
   CartItem,
 } from '../store/cartSlice';
 import { Product } from '../types/product';
 
-interface UseCartReturn {
-  items: CartItem[];
-  totalItems: number;
-  totalPrice: number;
-  isHydrated: boolean;
-  addItem: (product: Product, quantity?: number) => void;
-  removeItem: (productId: number) => void;
-  setQuantity: (productId: number, quantity: number) => void;
-  increment: (productId: number) => void;
-  decrement: (productId: number) => void;
-  clear: () => void;
-  isInCart: (productId: number) => boolean;
-  getItemQuantity: (productId: number) => number;
-}
-
-export const useCart = (): UseCartReturn => {
+export const useCart = () => {
   const dispatch = useDispatch();
   const { items, isHydrated } = useSelector((state: RootState) => state.cart);
 
@@ -39,79 +22,92 @@ export const useCart = (): UseCartReturn => {
     }
   }, [dispatch, isHydrated]);
 
-  const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
-
-  const totalPrice = items.reduce(
-    (sum, item) => sum + item.product.price * item.quantity,
-    0
-  );
-
   const addItem = useCallback(
-    (product: Product, quantity: number = 1) => {
-      dispatch(addToCart({ product, quantity }));
+    (product: Product) => {
+      dispatch(addToCart(product));
     },
     [dispatch]
   );
 
   const removeItem = useCallback(
-    (productId: number) => {
+    (productId: string) => {
       dispatch(removeFromCart(productId));
     },
     [dispatch]
   );
 
   const setQuantity = useCallback(
-    (productId: number, quantity: number) => {
+    (productId: string, quantity: number) => {
       dispatch(updateQuantity({ productId, quantity }));
     },
     [dispatch]
   );
 
-  const increment = useCallback(
-    (productId: number) => {
-      dispatch(incrementQuantity(productId));
+  const incrementQuantity = useCallback(
+    (productId: string) => {
+      const item = items.find((item) => item.product.id === productId);
+      if (item) {
+        dispatch(updateQuantity({ productId, quantity: item.quantity + 1 }));
+      }
     },
-    [dispatch]
+    [dispatch, items]
   );
 
-  const decrement = useCallback(
-    (productId: number) => {
-      dispatch(decrementQuantity(productId));
+  const decrementQuantity = useCallback(
+    (productId: string) => {
+      const item = items.find((item) => item.product.id === productId);
+      if (item) {
+        dispatch(updateQuantity({ productId, quantity: item.quantity - 1 }));
+      }
     },
-    [dispatch]
+    [dispatch, items]
   );
 
   const clear = useCallback(() => {
     dispatch(clearCart());
   }, [dispatch]);
 
-  const isInCart = useCallback(
-    (productId: number): boolean => {
-      return items.some((item) => item.product.id === productId);
-    },
-    [items]
-  );
-
   const getItemQuantity = useCallback(
-    (productId: number): number => {
+    (productId: string): number => {
       const item = items.find((item) => item.product.id === productId);
       return item?.quantity ?? 0;
     },
     [items]
   );
 
+  const isInCart = useCallback(
+    (productId: string): boolean => {
+      return items.some((item) => item.product.id === productId);
+    },
+    [items]
+  );
+
+  const totalItems = useMemo(
+    () => items.reduce((sum, item) => sum + item.quantity, 0),
+    [items]
+  );
+
+  const totalPrice = useMemo(
+    () =>
+      items.reduce(
+        (sum, item) => sum + item.product.price * item.quantity,
+        0
+      ),
+    [items]
+  );
+
   return {
     items,
+    isHydrated,
     totalItems,
     totalPrice,
-    isHydrated,
     addItem,
     removeItem,
     setQuantity,
-    increment,
-    decrement,
+    incrementQuantity,
+    decrementQuantity,
     clear,
-    isInCart,
     getItemQuantity,
+    isInCart,
   };
 };
